@@ -9,11 +9,9 @@ import {
   AlertCircle,
   MessageCircle,
 } from "lucide-react";
-import { useServerFn } from "@tanstack/react-start";
-
-import { submitInquiry } from "@/lib/contact.functions";
 import { interests, modes, validateContact, type FieldErrors } from "@/lib/contact-schema";
 import { trackEvent } from "@/lib/analytics";
+import { supabase } from "@/integrations/supabase/client";
 
 type Status = "idle" | "submitting" | "success" | "error";
 
@@ -22,7 +20,6 @@ const PHONE_INTL = "919885076704";
 const EMAIL = "bpmrsapfico@gmail.com";
 
 export default function Contact() {
-  const send = useServerFn(submitInquiry);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -90,26 +87,23 @@ export default function Contact() {
       return;
     }
 
-    let result: Awaited<ReturnType<typeof send>>;
     try {
-      result = await send({ data: raw });
+      const values = local.data;
+      const { error } = await supabase.from("contact_inquiries").insert({
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        company: values.mode || null,
+        service: values.interest || null,
+        message: values.message || "No additional message",
+      });
+      if (error) throw error;
     } catch (cause) {
       console.error("[contact] submit failed", cause);
       setStatus("error");
       setErrorMsg(
         "We couldn't reach our servers. Please check your connection or call +91 98850 76704.",
       );
-      return;
-    }
-
-    if (!result.ok) {
-      setStatus("error");
-      setFieldErrors(result.fieldErrors);
-      setErrorMsg(result.message);
-      void trackEvent("contact_form_validation_error", {
-        fields: Object.keys(result.fieldErrors),
-        source: "server",
-      });
       return;
     }
 
